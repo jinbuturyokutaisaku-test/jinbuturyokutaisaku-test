@@ -1,5 +1,5 @@
-python
-# app.py
+
+
 import os
 import json
 import time
@@ -88,7 +88,7 @@ def call_llm(client: OpenAI, module: str, theme: str, user_text: str):
 {user_text}
 """
     resp = client.chat.completions.create(
-        model="gpt-4.1-mini",  # 低コストで運用向け。必要なら変更
+        model="gpt-4o-mini",  # 低コストで運用向け。必要なら変更
         messages=[
             {"role": "system", "content": SYSTEM_BASE},
             {"role": "user", "content": module_prompt + "\n\n" + user_payload}
