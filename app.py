@@ -5,6 +5,7 @@ import json
 import time
 from datetime import datetime
 import streamlit as st
+import glob
 
 # ---- Optional: OpenAI SDK (new style) ----
 # pip install openai
@@ -79,6 +80,16 @@ def save_submission(module, user_text, ai_text, rubric_json):
         }, f, ensure_ascii=False, indent=2)
     return path
 
+def list_submissions(limit=50):
+    """submissionsフォルダ内のjsonを新しい順で返す"""
+    ensure_dir()
+    files = sorted(glob.glob(os.path.join(SAVE_DIR, "*.json")), reverse=True)
+    return files[:limit]
+
+def load_submission(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
 def call_llm(client: OpenAI, module: str, theme: str, user_text: str):
     module_prompt = MODULES[module]["prompt"]
     user_payload = f"""【テーマ／条件】
@@ -114,6 +125,32 @@ with col1:
     theme = st.text_area("テーマ／条件（任意）", placeholder="例：教員採用試験（小学校）／志望動機／討論テーマなど")
     st.markdown("### 共通採点軸（ルーブリック）")
     st.text(rubric_template())
+
+    st.markdown("---")
+    st.markdown("## 保存履歴")
+
+    files = list_submissions(limit=50)
+
+    if not files:
+        st.caption("まだ保存履歴がありません。AI実行後に表示されます。")
+    else:
+        labels = [os.path.basename(p) for p in files]
+        selected = st.selectbox("履歴を選択", labels, index=0)
+
+        selected_path = files[labels.index(selected)]
+        data = load_submission(selected_path)
+
+        st.markdown("### プレビュー")
+        st.caption(f"module: {data.get('module')} / timestamp: {data.get('timestamp')}")
+        st.text_area("受講者入力", value=data.get("user_text", ""), height=120)
+        st.text_area("AI出力", value=data.get("ai_text", ""), height=180)
+
+        st.download_button(
+            label="この履歴をJSONでダウンロード",
+            data=json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8"),
+            file_name=os.path.basename(selected_path),
+            mime="application/json"
+        )
 
 with col2:
     st.markdown("### 受講者入力")
