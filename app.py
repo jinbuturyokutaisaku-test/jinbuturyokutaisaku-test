@@ -1,8 +1,5 @@
-
-
 import os
 import json
-import time
 from datetime import datetime
 import streamlit as st
 import glob
@@ -63,32 +60,45 @@ MODULES = {
     }
 }
 
+
 def ensure_dir():
     os.makedirs(SAVE_DIR, exist_ok=True)
 
-def save_submission(module, user_text, ai_text, rubric_json):
+
+def save_submission(module: str, user_text: str, ai_text: str, meta: dict):
+    """SAVE_DIR に必ず保存する（保存先の統一）"""
     ensure_dir()
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = os.path.join(SAVE_DIR, f"{ts}_{module}.json")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{timestamp}_{module}.json"
+    path = os.path.join(SAVE_DIR, filename)
+
+    data = {
+        "timestamp": timestamp,
+        "module": module,
+        "user_text": user_text,
+        "ai_text": ai_text,
+        "meta": meta
+    }
+
     with open(path, "w", encoding="utf-8") as f:
-        json.dump({
-            "timestamp": ts,
-            "module": module,
-            "user_text": user_text,
-            "ai_text": ai_text,
-            "rubric": rubric_json
-        }, f, ensure_ascii=False, indent=2)
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
     return path
 
+
 def list_submissions(limit=50):
-    """submissionsフォルダ内のjsonを新しい順で返す"""
+    """submissionsフォルダ内のjsonを新しい順で返す（見る場所の統一）"""
     ensure_dir()
-    files = sorted(glob.glob(os.path.join(SAVE_DIR, "*.json")), reverse=True)
+    files = glob.glob(os.path.join(SAVE_DIR, "*.json"))
+    files.sort(reverse=True)
     return files[:limit]
+
 
 def load_submission(path):
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
+
 
 def call_llm(client: OpenAI, module: str, theme: str, user_text: str):
     module_prompt = MODULES[module]["prompt"]
@@ -108,9 +118,12 @@ def call_llm(client: OpenAI, module: str, theme: str, user_text: str):
     )
     return resp.choices[0].message.content
 
+
 def rubric_template():
     return "\n".join([f"- {k}: /{v}" for k, v in RUBRIC_COMMON.items()])
 
+
+# ---- UI ----
 st.set_page_config(page_title=APP_TITLE, layout="wide")
 st.title(APP_TITLE)
 
@@ -170,12 +183,21 @@ with col2:
             client = OpenAI(api_key=api_key)
             with st.spinner("生成中..."):
                 ai_text = call_llm(client, module, theme, user_text)
+
             st.markdown("### AIフィードバック（そのまま返却可）")
             st.write(ai_text)
 
-            # 保存（簡易：ルーブリックはAI出力から後で抽出する運用でもOK）
-            path = save_submission(module, user_text, ai_text, {"rubric_common": RUBRIC_COMMON})
+            # 保存
+            path = save_submission(
+                module=module,
+                user_text=user_text,
+                ai_text=ai_text,
+                meta={"rubric_common": RUBRIC_COMMON}
+            )
             st.success(f"保存しました: {path}")
+
+            # ★保存後に左カラムの履歴も即更新させる
+            st.rerun()
 
 st.markdown("---")
 st.caption("運用Tips: 受講者に「再提出」を必須化し、同一課題を2回以上回すと人物力（再現性）が急速に上がります。")
